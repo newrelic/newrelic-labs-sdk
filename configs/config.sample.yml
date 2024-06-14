@@ -1,0 +1,13 @@
+apiKey: XXXXXX
+licenseKey: XXXXXX
+accountId: 0
+region: US
+interval: 60
+runAsService: false
+pipeline:
+  itemsPerBatch: 50
+  harvestTime: 15
+  exportWorkers: 3
+log:
+  level: warn
+  fileName: trace.log
