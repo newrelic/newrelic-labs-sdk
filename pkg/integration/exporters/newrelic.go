@@ -61,7 +61,7 @@ func (e *NewRelicExporter) ExportMetrics(
 
 	if e.dryRun || log.IsDebugEnabled() {
 		log.Debugf("metrics payload JSON follows")
-		log.Debugf("%s", string(json))
+		log.PrettyPrintJson(NRPayload)
 
 		if e.dryRun {
 			return nil
