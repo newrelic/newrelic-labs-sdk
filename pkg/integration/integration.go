@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 
@@ -85,6 +86,20 @@ func (i *LabsIntegration) AddPipeline(p pipeline.Pipeline) {
 }
 
 func (i *LabsIntegration) Run(ctx context.Context) error {
+	// Show the version
+	if viper.GetBool("version") {
+		log.Infof(
+			"%s Version: %s, Platform: %s, GoVersion: %s, GitCommit: %s, BuildDate: %s\n",
+			i.BuildInfo.Name,
+			i.BuildInfo.Version,
+			fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
+			runtime.Version(),
+			i.BuildInfo.GitCommit,
+			i.BuildInfo.BuildDate,
+		)
+		os.Exit(0)
+	}
+
 	if !i.RunAsService {
 		errors := i.executeSync(ctx)
 		if errors != nil {
@@ -323,15 +338,29 @@ func configLicenseKey(licenseKey string) nrClient.ConfigOption {
 	}
 }
 
-func loadConfig(configPath string, prefix string) error {
-	if configPath == "" {
-		return NewConfigWithPaths(prefix)
+func loadConfig() error {
+	envPrefix := viper.GetString("env_prefix")
+
+	viper.AutomaticEnv()
+	if envPrefix != "" {
+		viper.SetEnvPrefix(envPrefix)
 	}
 
-	return NewConfigWithFile(configPath, prefix)
+	// @TODO: When Viper officially releases this function, use it to add
+	// an env replace to convert to screaming snake case.
+	// viper.SetOptions(WithEnvReplacer(...))
+
+	configPath := viper.GetString("config_path")
+	if configPath == "" {
+		return NewConfigWithPaths()
+	}
+
+	return NewConfigWithFile(configPath)
 }
 
-func setupLogging(logger *logrus.Logger, verbose bool) error {
+func setupLogging(logger *logrus.Logger) error {
+	verbose := viper.GetBool("verbose")
+
 	if viper.IsSet("log.fileName") {
 		file, err := os.OpenFile(
 			viper.GetString("log.fileName"),

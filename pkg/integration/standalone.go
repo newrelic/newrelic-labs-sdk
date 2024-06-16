@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"flag"
 	"fmt"
 	"os"
 
@@ -9,23 +8,13 @@ import (
 	"github.com/newrelic/go-agent/v3/newrelic"
 	"github.com/newrelic/newrelic-labs-sdk/pkg/integration/log"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-)
-
-type StandaloneIntegrationArgs struct {
-	Verbose			bool
-	DryRun			bool
-	ConfigPath		string
-}
-
-var (
-	standaloneArgs		StandaloneIntegrationArgs
 )
 
 func NewStandaloneIntegration(
 	buildInfo *BuildInfo,
 	appName string,
-	envPrefix string,
 	labsIntegrationOpts ...LabsIntegrationOpt,
 ) (*LabsIntegration, error) {
 	// Parse args
@@ -34,13 +23,13 @@ func NewStandaloneIntegration(
 	// Load configuration with viper
 	// We have to do this prior to setting up the APM app because the license
 	// key may be in the config.
-	err := loadConfig(standaloneArgs.ConfigPath, envPrefix)
+	err := loadConfig()
 	if err != nil {
 		return nil, err
 	}
 
 	// Now that the config is loaded, setup logging
-	err = setupLogging(log.RootLogger, standaloneArgs.Verbose)
+	err = setupLogging(log.RootLogger)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +49,7 @@ func NewStandaloneIntegration(
 		nil,
 		log.RootLogger,
 		viper.GetBool("runAsService"),
-		standaloneArgs.DryRun,
+		viper.GetBool("dry_run"),
 		labsIntegrationOpts,
 	)
 }
@@ -106,24 +95,37 @@ func setupApm(
 }
 
 func parseStandaloneArgs() {
-	flag.BoolVar(
-		&standaloneArgs.Verbose,
+	pflag.Bool(
 		"verbose",
 		false,
 		"enable verbose logging",
 	)
-	flag.BoolVar(
-		&standaloneArgs.DryRun,
+	pflag.Bool(
 		"dry_run",
 		false,
 		"run in dry run mode",
 	)
-	flag.StringVar(
-		&standaloneArgs.ConfigPath,
+	pflag.Bool(
+		"version",
+		false,
+		"display version information",
+	)
+	pflag.String(
 		"config_path",
 		"",
 		"path to YML configuration file",
 	)
+	pflag.String(
+		"env_prefix",
+		"",
+		"prefix to use for environment variable lookup",
+	)
 
-	flag.Parse()
+	pflag.Parse()
+
+	// Bind pflags to viper. This isn't done in the common setupConfig because
+	// on the infrastructure side we don't bind pflags because flags are already
+	// parsed in the infra code.
+
+	viper.BindPFlags(pflag.CommandLine)
 }

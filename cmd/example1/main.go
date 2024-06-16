@@ -100,7 +100,6 @@ func main() {
 	i, err := integration.NewStandaloneIntegration(
 		&gBuildInfo,
 		gBuildInfo.Name,
-		"",
 		integration.WithLicenseKey(),
 		integration.WithApiKey(),
 		integration.WithAccountId(),
