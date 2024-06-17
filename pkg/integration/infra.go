@@ -29,6 +29,11 @@ func NewInfraIntegration(
 		return nil, err
 	}
 
+	// Maybe show the version info
+	if infraArgs.ShowVersion {
+		showVersionAndExit(buildInfo)
+	}
+
 	// Bind custom flag information to viper
 	// We have to do this manually because infra already parses flags and we
 	// don't want to reparse them with viper/pflag.

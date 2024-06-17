@@ -86,20 +86,6 @@ func (i *LabsIntegration) AddPipeline(p pipeline.Pipeline) {
 }
 
 func (i *LabsIntegration) Run(ctx context.Context) error {
-	// Show the version
-	if viper.GetBool("version") {
-		fmt.Printf(
-			"%s Version: %s, Platform: %s, GoVersion: %s, GitCommit: %s, BuildDate: %s\n",
-			i.BuildInfo.Name,
-			i.BuildInfo.Version,
-			fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
-			runtime.Version(),
-			i.BuildInfo.GitCommit,
-			i.BuildInfo.BuildDate,
-		)
-		os.Exit(0)
-	}
-
 	// Run once
 	if !i.RunAsService {
 		errors := i.executeSync(ctx)
@@ -123,6 +109,20 @@ func (i *LabsIntegration) Run(ctx context.Context) error {
 	wg.Wait()
 
 	return nil
+}
+
+func showVersionAndExit(buildInfo *BuildInfo) {
+	// Show the version
+	fmt.Printf(
+		"%s Version: %s, Platform: %s, GoVersion: %s, GitCommit: %s, BuildDate: %s\n",
+		buildInfo.Name,
+		buildInfo.Version,
+		fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
+		runtime.Version(),
+		buildInfo.GitCommit,
+		buildInfo.BuildDate,
+	)
+	os.Exit(0)
 }
 
 func pollerWorker(

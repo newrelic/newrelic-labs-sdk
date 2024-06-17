@@ -20,10 +20,16 @@ func NewStandaloneIntegration(
 	// Parse args
 	parseStandaloneArgs()
 
+	// Maybe show the version info
+	err := maybeShowVersion(buildInfo)
+	if err != nil {
+		return nil, err
+	}
+
 	// Load configuration with viper
 	// We have to do this prior to setting up the APM app because the license
 	// key may be in the config.
-	err := loadConfig()
+	err = loadConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -52,6 +58,19 @@ func NewStandaloneIntegration(
 		viper.GetBool("dry_run"),
 		labsIntegrationOpts,
 	)
+}
+
+func maybeShowVersion(buildInfo *BuildInfo) error {
+	version, err := pflag.CommandLine.GetBool("version")
+	if err != nil {
+		return err
+	}
+
+	if version {
+		showVersionAndExit(buildInfo)
+	}
+
+	return nil
 }
 
 func setupApm(
