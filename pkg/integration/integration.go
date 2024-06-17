@@ -88,7 +88,7 @@ func (i *LabsIntegration) AddPipeline(p pipeline.Pipeline) {
 func (i *LabsIntegration) Run(ctx context.Context) error {
 	// Show the version
 	if viper.GetBool("version") {
-		log.Infof(
+		fmt.Printf(
 			"%s Version: %s, Platform: %s, GoVersion: %s, GitCommit: %s, BuildDate: %s\n",
 			i.BuildInfo.Name,
 			i.BuildInfo.Version,
@@ -100,6 +100,7 @@ func (i *LabsIntegration) Run(ctx context.Context) error {
 		os.Exit(0)
 	}
 
+	// Run once
 	if !i.RunAsService {
 		errors := i.executeSync(ctx)
 		if errors != nil {
@@ -109,6 +110,7 @@ func (i *LabsIntegration) Run(ctx context.Context) error {
 		return nil
 	}
 
+	// Run as a service on a recurring interval
 	var wg sync.WaitGroup
 
 	for j := 0; j < len(i.pipelines); j++ {
