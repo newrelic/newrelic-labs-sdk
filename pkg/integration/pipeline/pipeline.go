@@ -13,7 +13,7 @@ import (
 const (
 	DEFAULT_HARVEST_TIME = 60
 	DEFAULT_ITEMS_PER_BATCH = 500
-	DEFAULT_MAX_EXPORT_WORKERS = 2
+	DEFAULT_PIPELINE_INSTANCES = 3
 )
 
 var gPollSignal = struct{}{}
@@ -29,22 +29,30 @@ type Component interface {
 	GetId() string
 }
 
-type pipeline[T interface{}] struct {
-	InputChan 		chan T
-	receivers 		[]Receiver[T]
-	receiverChans	[]chan struct{}
-	processorList 	*ProcessorList[T]
-	exporters		[]Exporter[T]
-	exportChan		chan []T
-	resultChan		chan error
+type PipelineInstance[T interface{}] struct {
+	pollChan	chan struct{}
+	receivers 	[]Receiver[T]
+	dataChan  	chan T
+	processors	*ProcessorList[T]
+	exportChan  chan []T
+	exporters 	[]Exporter[T]
+	resultChan  chan error
 }
 
-func execute(
-	ctx context.Context,
-	receiverChans []chan struct{},
+type pipeline[T interface{}] struct {
+	receivers 		[]Receiver[T]
+	processorList 	*ProcessorList[T]
+	exporters		[]Exporter[T]
+	instances		[]PipelineInstance[T]
+}
+
+func execute[T interface{}](
+	_ context.Context,
+	instances []PipelineInstance[T],
 ) error {
-	for i := 0; i < len(receiverChans); i += 1 {
-		receiverChans[i] <- gPollSignal
+	for i := 0; i < len(instances); i += 1 {
+		log.Debugf("sending poll signal to pipeline instance %d", i)
+		instances[i].pollChan <- gPollSignal
 	}
 
 	return nil
@@ -92,7 +100,7 @@ func executeSync[T interface{}](
 		}
 	}
 
-	log.Debugf("starting result reader")
+	log.Debugf("starting result worker")
 	go func() {
 		done := false
 		for ; !done; {
@@ -122,73 +130,103 @@ func executeSync[T interface{}](
 func start[T interface{}](
 	ctx context.Context,
 	wg *sync.WaitGroup,
-	dataChan chan T,
 	receivers []Receiver[T],
-	receiverChans []chan struct{},
 	processorList *ProcessorList[T],
 	exporters []Exporter[T],
-	exportChan chan []T,
-	resultChan chan error,
-) error {
+) ([]PipelineInstance[T], error) {
+	instances := []PipelineInstance[T]{}
+
+	maxInstances := viper.GetInt("pipeline.instances")
+	if maxInstances == 0 {
+		log.Debugf(
+			"defaulting pipeline instances to %d", DEFAULT_PIPELINE_INSTANCES,
+		)
+		maxInstances = DEFAULT_PIPELINE_INSTANCES
+	}
+
+	if len(receivers) < maxInstances {
+		maxInstances = len(receivers)
+	}
+
+	receiverGroups := make([][]Receiver[T], maxInstances)
+
+	group := 0
 	for i := 0; i < len(receivers); i += 1 {
-		receiverChans = append(receiverChans, make(chan struct{}))
+		receiverGroups[group] = append(receiverGroups[group], receivers[i])
+		group += 1
+		if group == maxInstances {
+			group = 0
+		}
+	}
+
+	for i := 0; i < maxInstances; i += 1 {
+		instance := PipelineInstance[T]{
+			make(chan struct{}),
+			receiverGroups[i],
+			make(chan T),
+			processorList,
+			make(chan []T),
+			exporters,
+			make(chan error),
+		}
+
+		log.Debugf("starting receiver worker %d", i)
 
 		wg.Add(1)
 		go receiverWorker(
 			ctx,
 			wg,
-			receivers[i],
-			receiverChans[i],
-			dataChan,
-			resultChan,
+			instance.receivers,
+			instance.pollChan,
+			instance.dataChan,
+			instance.resultChan,
 		)
-	}
 
-	maxExportWorkers := viper.GetInt("pipeline.exportWorkers")
-	if maxExportWorkers == 0 {
-		maxExportWorkers = DEFAULT_MAX_EXPORT_WORKERS
-	}
+		log.Debugf("starting processor worker %d", i)
 
-	log.Debugf("starting %d export workers", maxExportWorkers)
-
-	for i := 0; i < maxExportWorkers; i += 1 {
 		wg.Add(1)
-		go exporterWorker(ctx, wg, exporters, exportChan, resultChan)
+		go processorWorker(
+			ctx,
+			wg,
+			processorList,
+			instance.dataChan,
+			instance.exportChan,
+			instance.resultChan,
+			false,
+		)
+
+		log.Debugf("starting exporter worker %d", i)
+
+		wg.Add(1)
+		go exporterWorker(
+			ctx,
+			wg,
+			instance.exporters,
+			instance.exportChan,
+			instance.resultChan,
+		)
+
+		log.Debugf("starting result worker %d", i)
+
+		wg.Add(1)
+		go resultWorker(ctx, wg, instance.resultChan)
+
+		instances = append(instances, instance)
 	}
 
-	// @TODO: right now this is a single reader worker and is a bottleneck
-	wg.Add(1)
-	go processorWorker(
-		ctx,
-		wg,
-		processorList,
-		dataChan,
-		exportChan,
-		resultChan,
-		false,
-	)
-
-	wg.Add(1)
-	go resultWorker(ctx, wg, resultChan)
-
-	return nil
+	return instances, nil
 }
 
 func shutdown[T interface{}](
-	ctx context.Context,
-	dataChan chan T,
-	receiverChans []chan struct{},
-	exportChan chan []T,
-	resultChan chan error,
+	_ context.Context,
+	instances []PipelineInstance[T],
 ) error {
-	close(dataChan)
-
-	for i := 0; i < len(receiverChans); i += 1 {
-		close(receiverChans[i])
+	for _, instance := range instances {
+		close(instance.pollChan)
+		close(instance.dataChan)
+		close(instance.exportChan)
+		close(instance.resultChan)
 	}
-
-	close(exportChan)
-	close(resultChan)
 
 	return nil
 }
@@ -196,7 +234,7 @@ func shutdown[T interface{}](
 func receiverWorker[T interface{}](
 	ctx context.Context,
 	wg *sync.WaitGroup,
-	poller Receiver[T],
+	receivers []Receiver[T],
 	pollChan chan struct{},
 	dataChan chan T,
 	resultChan chan error,
@@ -211,14 +249,16 @@ func receiverWorker[T interface{}](
 				return
 			}
 
-			log.Debugf("running poll for receiver %s", poller.GetId())
+			for _, receiver := range receivers {
+				log.Debugf("running poll for receiver %s", receiver.GetId())
 
-			err := poller.Poll(ctx, dataChan)
-			if err != nil {
-				log.Errorf("poll failed: %v", err)
+				err := receiver.Poll(ctx, dataChan)
+				if err != nil {
+					log.Errorf("poll failed: %v", err)
+				}
+
+				resultChan <- err
 			}
-
-			resultChan <- err
 
 		case <- ctx.Done():
 			resultChan <- nil

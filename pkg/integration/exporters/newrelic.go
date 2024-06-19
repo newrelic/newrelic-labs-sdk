@@ -149,7 +149,7 @@ func (e *NewRelicExporter) ExportLogs(
 
 	log.Debugf("all logs enqueued; flushing logs")
 
-	return e.NrClient.Events.Flush()
+	return e.NrClient.Logs.Flush()
 }
 
 type NRLogEntry struct {

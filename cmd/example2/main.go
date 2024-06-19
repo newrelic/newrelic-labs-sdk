@@ -34,31 +34,33 @@ type ipify struct {
 	IpAddress string `json:"ip"`
 }
 
-func ipifyLogDecoder(
-	receiver pipeline.LogsReceiver,
-	in io.ReadCloser,
-	out chan <- model.Log,
-) error {
-	ip := ipify{}
+func newDecoder(num int) pipeline.LogsDecoderFunc {
+	return func (
+		receiver pipeline.LogsReceiver,
+		in io.ReadCloser,
+		out chan <- model.Log,
+	) error {
+		ip := ipify{}
 
-	dec := json.NewDecoder(in)
+		dec := json.NewDecoder(in)
 
-	err := dec.Decode(&ip)
-	if err != nil {
-		return err
+		err := dec.Decode(&ip)
+		if err != nil {
+			return err
+		}
+
+		log.Debugf("receiver %d: my IP is %s", num, string(ip.IpAddress))
+
+		iplog := model.NewLog(
+			fmt.Sprintf("receiver %d: my IP is %s", num, string(ip.IpAddress)),
+			map[string]interface{}{"ip": ip.IpAddress},
+			time.Now(),
+		)
+
+		out <- iplog
+
+		return nil
 	}
-
-	log.Debugf("my IP is %s", string(ip.IpAddress))
-
-	iplog := model.NewLog(
-		fmt.Sprintf("my IP is %s", string(ip.IpAddress)),
-		map[string]interface{}{"ip": ip.IpAddress},
-		time.Now(),
-	)
-
-	out <- iplog
-
-	return nil
 }
 
 func main() {
@@ -78,19 +80,21 @@ func main() {
 	)
 	fatalIfErr(err)
 
-	// Create a simple receiver for ipify with our decoder func
-	ipifyReceiver := pipeline.NewSimpleReceiver(
-		"ipify",
-		"https://api.ipify.org/?format=json",
-		pipeline.WithLogsDecoder(ipifyLogDecoder),
-	)
-
-	// Create the newrelic exporter
-	newRelicExporter := exporters.NewNewRelicExporter("newrelic", i)
-
 	// Create a logs pipeline
 	lp := pipeline.NewLogsPipeline()
-	lp.AddReceiver(ipifyReceiver)
+
+	// Create some receivers and add them to the pipeline
+	for i := 0; i < 10; i += 1 {
+		ipifyReceiver := pipeline.NewSimpleReceiver(
+			"ipify",
+			"https://api.ipify.org/?format=json",
+			pipeline.WithLogsDecoder(newDecoder(i)),
+		)
+		lp.AddReceiver(ipifyReceiver)
+	}
+
+	// Create the newrelic exporter and add it to the pipeline
+	newRelicExporter := exporters.NewNewRelicExporter("newrelic", i)
 	lp.AddExporter(newRelicExporter)
 
 	// Register the pipeline with the integration
