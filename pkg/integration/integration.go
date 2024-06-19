@@ -22,6 +22,10 @@ import (
 	"github.com/spf13/viper"
 )
 
+const (
+	DEFAULT_INTERVAL = 60
+)
+
 type BuildInfo struct {
 	Id        string
 	Name      string
@@ -66,6 +70,7 @@ func newLabsIntegration(
 		App: app,
 		Integration: integration,
 		Logger: logger,
+		Interval: DEFAULT_INTERVAL,
 		RunAsService: runAsService,
 		DryRun: dryRun,
 		pipelines: []pipeline.Pipeline{},

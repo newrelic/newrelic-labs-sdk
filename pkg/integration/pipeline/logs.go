@@ -28,13 +28,9 @@ type LogsPipeline pipeline[model.Log]
 
 func NewLogsPipeline() *LogsPipeline {
 	return &LogsPipeline{
-		InputChan: make(chan model.Log),
 		receivers: []Receiver[model.Log]{},
-		receiverChans: []chan struct{}{},
 		processorList: &ProcessorList[model.Log]{},
 		exporters: []Exporter[model.Log]{},
-		exportChan: make(chan []model.Log),
-		resultChan: make(chan error),
 	}
 }
 
@@ -57,7 +53,7 @@ func (p *LogsPipeline) AddExporter(exporter LogsExporter) {
 }
 
 func (p *LogsPipeline) Execute(ctx context.Context) error {
-	return nil
+	return execute(ctx, p.instances)
 }
 
 func (p *LogsPipeline) ExecuteSync(ctx context.Context) []error {
@@ -70,26 +66,26 @@ func (p *LogsPipeline) ExecuteSync(ctx context.Context) []error {
 }
 
 func (p *LogsPipeline) Start(ctx context.Context, wg *sync.WaitGroup) error {
-	return start[model.Log](
+	instances, err := start[model.Log](
 		ctx,
 		wg,
-		p.InputChan,
 		p.receivers,
-		p.receiverChans,
 		p.processorList,
 		p.exporters,
-		p.exportChan,
-		p.resultChan,
 	)
+	if err != nil {
+		return err
+	}
+
+	p.instances = instances
+
+	return nil
 }
 
 
 func (p *LogsPipeline) Shutdown(ctx context.Context) error {
 	return shutdown[model.Log](
 		ctx,
-		p.InputChan,
-		p.receiverChans,
-		p.exportChan,
-		p.resultChan,
+		p.instances,
 	)
 }

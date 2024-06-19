@@ -28,13 +28,9 @@ type MetricsPipeline pipeline[model.Metric]
 
 func NewMetricsPipeline() *MetricsPipeline {
 	return &MetricsPipeline{
-		InputChan: make(chan model.Metric),
 		receivers: []Receiver[model.Metric]{},
-		receiverChans: []chan struct{}{},
 		processorList: &ProcessorList[model.Metric]{},
 		exporters: []Exporter[model.Metric]{},
-		exportChan: make(chan []model.Metric),
-		resultChan: make(chan error),
 	}
 }
 
@@ -43,7 +39,6 @@ func (p *MetricsPipeline) AddReceiver(receiver MetricsReceiver) {
 		p.receivers,
 		NewReceiverAdapter[model.Metric](receiver.GetId(), receiver.PollMetrics),
 	)
-	p.receiverChans = append(p.receiverChans, make(chan struct{}))
 }
 
 func (p *MetricsPipeline) AddProcessor(processor ProcessorFunc[model.Metric]) {
@@ -58,7 +53,7 @@ func (p *MetricsPipeline) AddExporter(exporter MetricsExporter) {
 }
 
 func (p *MetricsPipeline) Execute(ctx context.Context) error {
-	return execute(ctx, p.receiverChans)
+	return execute(ctx, p.instances)
 }
 
 func (p *MetricsPipeline) ExecuteSync(ctx context.Context) []error {
@@ -71,26 +66,26 @@ func (p *MetricsPipeline) ExecuteSync(ctx context.Context) []error {
 }
 
 func (p *MetricsPipeline) Start(ctx context.Context, wg *sync.WaitGroup) error {
-	return start[model.Metric](
+	instances, err := start[model.Metric](
 		ctx,
 		wg,
-		p.InputChan,
 		p.receivers,
-		p.receiverChans,
 		p.processorList,
 		p.exporters,
-		p.exportChan,
-		p.resultChan,
 	)
+	if err != nil {
+		return err
+	}
+
+	p.instances = instances
+
+	return nil
 }
 
 
 func (p *MetricsPipeline) Shutdown(ctx context.Context) error {
 	return shutdown[model.Metric](
 		ctx,
-		p.InputChan,
-		p.receiverChans,
-		p.exportChan,
-		p.resultChan,
+		p.instances,
 	)
 }

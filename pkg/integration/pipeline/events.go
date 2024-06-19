@@ -28,13 +28,9 @@ type EventsPipeline pipeline[model.Event]
 
 func NewEventsPipeline() *EventsPipeline {
 	return &EventsPipeline{
-		InputChan: make(chan model.Event),
 		receivers: []Receiver[model.Event]{},
-		receiverChans: []chan struct{}{},
 		processorList: &ProcessorList[model.Event]{},
 		exporters: []Exporter[model.Event]{},
-		exportChan: make(chan []model.Event),
-		resultChan: make(chan error),
 	}
 }
 
@@ -57,7 +53,7 @@ func (p *EventsPipeline) AddExporter(exporter EventsExporter) {
 }
 
 func (p *EventsPipeline) Execute(ctx context.Context) error {
-	return execute(ctx, p.receiverChans)
+	return execute(ctx, p.instances)
 }
 
 func (p *EventsPipeline) ExecuteSync(ctx context.Context) []error {
@@ -70,26 +66,26 @@ func (p *EventsPipeline) ExecuteSync(ctx context.Context) []error {
 }
 
 func (p *EventsPipeline) Start(ctx context.Context, wg *sync.WaitGroup) error {
-	return start[model.Event](
+	instances, err := start[model.Event](
 		ctx,
 		wg,
-		p.InputChan,
 		p.receivers,
-		p.receiverChans,
 		p.processorList,
 		p.exporters,
-		p.exportChan,
-		p.resultChan,
 	)
+	if err != nil {
+		return err
+	}
+
+	p.instances = instances
+
+	return nil
 }
 
 
 func (p *EventsPipeline) Shutdown(ctx context.Context) error {
 	return shutdown[model.Event](
 		ctx,
-		p.InputChan,
-		p.receiverChans,
-		p.exportChan,
-		p.resultChan,
+		p.instances,
 	)
 }
