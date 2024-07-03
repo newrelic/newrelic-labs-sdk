@@ -5,7 +5,7 @@ region: US
 interval: 60
 runAsService: false
 pipeline:
-  itemsPerBatch: 50
+  receiveBufferSize: 50
   harvestTime: 15
   instances: 3
 log:
