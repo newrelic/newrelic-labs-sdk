@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	DEFAULT_HARVEST_TIME = 60
-	DEFAULT_ITEMS_PER_BATCH = 500
+	DEFAULT_HARVEST_INTERVAL = 60
+	DEFAULT_RECEIVE_BUFFER_SIZE = 500
 	DEFAULT_PIPELINE_INSTANCES = 3
 )
 
@@ -90,16 +90,6 @@ func executeSync[T interface{}](
 	log.Debugf("starting exporter worker")
 	go exporterWorker[T](ctx, &wg, exporters, exportChan, resultChan)
 
-	for i := 0; i < len(receivers); i += 1 {
-		log.Debugf("running receiver %s", receivers[i].GetId())
-
-		err := receivers[i].Poll(ctx, dataChan)
-		if err != nil {
-			errs = append(errs, err)
-			break
-		}
-	}
-
 	log.Debugf("starting result worker")
 	go func() {
 		done := false
@@ -114,6 +104,16 @@ func executeSync[T interface{}](
 			errs = append(errs, err)
 		}
 	}()
+
+	for i := 0; i < len(receivers); i += 1 {
+		log.Debugf("running receiver %s", receivers[i].GetId())
+
+		err := receivers[i].Poll(ctx, dataChan)
+		if err != nil {
+			errs = append(errs, err)
+			break
+		}
+	}
 
 	close(dataChan)
 	wg.Wait()
@@ -295,21 +295,21 @@ func processorWorker[T any](
 ) {
 	defer wg.Done()
 
-	itemsPerBatch := viper.GetInt("pipeline.itemsPerBatch")
-	if itemsPerBatch == 0 {
-		itemsPerBatch = DEFAULT_ITEMS_PER_BATCH
+	receiveBufferSize := viper.GetInt("pipeline.receiveBufferSize")
+	if receiveBufferSize == 0 {
+		receiveBufferSize = DEFAULT_RECEIVE_BUFFER_SIZE
 	}
 
-	log.Debugf("using %d items per batch", itemsPerBatch)
-	data := make([]T, 0, itemsPerBatch)
+	log.Debugf("using %d receive buffer size", receiveBufferSize)
+	data := make([]T, 0, receiveBufferSize)
 
-	harvestTime := viper.GetInt("pipeline.harvestTime")
-	if harvestTime == 0 {
-		harvestTime = DEFAULT_HARVEST_TIME
+	harvestInterval := viper.GetInt("pipeline.harvestInterval")
+	if harvestInterval == 0 {
+		harvestInterval = DEFAULT_HARVEST_INTERVAL
 	}
 
-	log.Debugf("using %d harvest time", harvestTime)
-	ticker := time.NewTicker(time.Duration(harvestTime) * time.Second)
+	log.Debugf("using %d harvest interval", harvestInterval)
+	ticker := time.NewTicker(time.Duration(harvestInterval) * time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -333,7 +333,7 @@ func processorWorker[T any](
 
 			data = append(data, datum)
 
-			if len(data) + 20 >= itemsPerBatch {
+			if len(data) + 20 >= receiveBufferSize {
 				err := flush(processorList, data, exportChan)
 				if err != nil {
 					// @TODO: should we return here or keep processing more
@@ -343,7 +343,7 @@ func processorWorker[T any](
 					log.Errorf("flush failed: %v", err)
 					resultChan <- err
 				}
-				data = make([]T, 0, itemsPerBatch)
+				data = make([]T, 0, receiveBufferSize)
 			}
 
 		case <-ticker.C:
@@ -358,7 +358,7 @@ func processorWorker[T any](
 				log.Errorf("flush failed: %v", err)
 				resultChan <- err
 			}
-			data = make([]T, 0, itemsPerBatch)
+			data = make([]T, 0, receiveBufferSize)
 
 		case <- ctx.Done():
 			return
