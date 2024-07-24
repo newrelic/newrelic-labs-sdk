@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/newrelic/newrelic-labs-sdk/pkg/integration/log"
 )
 
 const (
@@ -114,6 +116,8 @@ func (c *HttpConnector) SetTimeout(timeout time.Duration) {
 }
 
 func (c *HttpConnector) httpGet() (io.ReadCloser, error) {
+	log.Debugf("creating HTTP GET request for %s", c.Url)
+
 	req, err := http.NewRequest("GET", c.Url, nil)
 	if err != nil {
 		return nil, err
@@ -124,6 +128,7 @@ func (c *HttpConnector) httpGet() (io.ReadCloser, error) {
 	}
 
 	if c.Authenticator != nil {
+		log.Debugf("authenticating request for %s", c.Url)
 		err = c.Authenticator.Authenticate(c, req)
 		if err != nil {
 			return nil, err
@@ -132,6 +137,8 @@ func (c *HttpConnector) httpGet() (io.ReadCloser, error) {
 
 	client := http.DefaultClient
 	client.Timeout = c.Timeout
+
+	log.Debugf("performing request for %s", c.Url)
 	resp, err := client.Do(req)
 
 	if err != nil {
@@ -163,6 +170,8 @@ func (c *HttpConnector) httpGet() (io.ReadCloser, error) {
 }
 
 func (c *HttpConnector) httpPost(reqBody io.Reader) (io.ReadCloser, error) {
+	log.Debugf("creating HTTP POST request for %s", c.Url)
+
 	req, err := http.NewRequest("POST", c.Url, reqBody)
 	if err != nil {
 		return nil, err
@@ -173,6 +182,7 @@ func (c *HttpConnector) httpPost(reqBody io.Reader) (io.ReadCloser, error) {
 	}
 
 	if c.Authenticator != nil {
+		log.Debugf("authenticating request for %s", c.Url)
 		err = c.Authenticator.Authenticate(c, req)
 		if err != nil {
 			return nil, err
@@ -181,6 +191,8 @@ func (c *HttpConnector) httpPost(reqBody io.Reader) (io.ReadCloser, error) {
 
 	client := http.DefaultClient
 	client.Timeout = c.Timeout
+
+	log.Debugf("performing request for %s", c.Url)
 	resp, err := client.Do(req)
 
 	if err != nil {

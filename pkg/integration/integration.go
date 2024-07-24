@@ -26,15 +26,14 @@ const (
 	DEFAULT_INTERVAL = 60
 )
 
-type BuildInfo struct {
-	Id        string
-	Name      string
-	Version   string
-	GitCommit string
-	BuildDate string
-}
-
 type (
+	BuildInfo struct {
+		Id        string
+		Name      string
+		Version   string
+		GitCommit string
+		BuildDate string
+	}
 	LabsIntegrationOpt func(li *LabsIntegration) error
 )
 
@@ -256,39 +255,13 @@ func WithClient() LabsIntegrationOpt {
 
 func WithEvents(ctx context.Context) LabsIntegrationOpt {
 	return func(li *LabsIntegration) error {
-		if li.NrClient == nil {
-			return fmt.Errorf("error enabling events: client not enabled")
-		}
-
-		if li.accountId == 0 {
-			return fmt.Errorf("error enabling events: missing account ID")
-		}
-
-		// Start batch mode
-		if err := li.NrClient.Events.BatchMode(ctx, li.accountId); err != nil {
-			return fmt.Errorf("error starting batch events mode: %v", err)
-		}
-
-		li.eventsEnabled = true
-
-		return nil
+		return setupEvents(ctx, li)
 	}
 }
 
 func WithLogs(ctx context.Context) LabsIntegrationOpt {
 	return func(li *LabsIntegration) error {
-		if li.NrClient == nil {
-			return fmt.Errorf("error enabling logs: client not enabled")
-		}
-
-		// Start batch mode
-		if err := li.NrClient.Logs.BatchMode(ctx, li.accountId); err != nil {
-			return fmt.Errorf("error starting batch logs mode: %v", err)
-		}
-
-		li.logsEnabled = true
-
-		return nil
+		return setupLogs(ctx, li)
 	}
 }
 
@@ -315,6 +288,29 @@ func (i *LabsIntegration) GetLicenseKey() string {
 
 func (i *LabsIntegration) GetApiKey() string {
 	return i.apiKey
+}
+
+func (i *LabsIntegration) AddEvent(
+	ctx context.Context,
+	eventType string,
+	attributes map[string]string,
+) error {
+	if !i.eventsEnabled {
+		return fmt.Errorf("failed to add event, events not enabled")
+	}
+
+	evt := make(map[string]string)
+	evt["eventType"] = eventType
+
+	for k, v := range attributes {
+		evt[k] = v
+	}
+
+	if err := i.NrClient.Events.EnqueueEvent(ctx, evt); err != nil {
+		return fmt.Errorf("failed to add event: %w", err)
+	}
+
+	return nil
 }
 
 func (i *LabsIntegration) flushDataAndWait() error {
@@ -425,6 +421,55 @@ func setupClient(li *LabsIntegration) error {
 	}
 
 	li.NrClient = client
+
+	return nil
+}
+
+func setupEvents(ctx context.Context, li *LabsIntegration) error {
+	if li.NrClient == nil {
+		err := setupClient(li)
+		if err != nil {
+			return err
+		}
+	}
+
+	if li.accountId == 0 {
+		accountId, err := getAccountId()
+		if err != nil {
+			return err
+		}
+
+		li.accountId = accountId
+	}
+
+	// Start batch mode
+	if err := li.NrClient.Events.BatchMode(ctx, li.accountId); err != nil {
+		return fmt.Errorf("error starting batch events mode: %w", err)
+	}
+
+	li.eventsEnabled = true
+
+	return nil
+}
+
+func setupLogs(ctx context.Context, li *LabsIntegration) error {
+	if li.NrClient == nil {
+		err := setupClient(li)
+		if err != nil {
+			return err
+		}
+	}
+
+	// We don't validate or get account ID here because it is not needed to
+	// send logs. Even though it is required by the BatchMode() call, it is
+	// not used in the implementation. So if we pass 0, it won't cause errors.
+
+	// Start batch mode
+	if err := li.NrClient.Logs.BatchMode(ctx, li.accountId); err != nil {
+		return fmt.Errorf("error starting batch logs mode: %w", err)
+	}
+
+	li.logsEnabled = true
 
 	return nil
 }
