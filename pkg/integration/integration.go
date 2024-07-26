@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -351,7 +352,17 @@ func loadConfig() error {
 
 	// @TODO: When Viper officially releases this function, use it to add
 	// an env replace to convert to screaming snake case.
+	// The reason we can't do this now is because we use the global viper
+	// instance. We don't create our own Viper instance using NewWithOptions()
+	// so we can't specify options. The reason we want to do this is because our
+	// config file naming standard uses camelcase keys but environment variables
+	// should use screaming snake case. And the reason we can't use the existing
+	// SetEnvKeyReplacer is that that can only be used to replace one character
+	// with another and not do more complex replacements.
 	// viper.SetOptions(WithEnvReplacer(...))
+	// For now, at least replace . with _ so that nested key lookups can be
+	// done using shell-safe environment variable ids.
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
 	configPath := viper.GetString("config_path")
 	if configPath == "" {
