@@ -10,30 +10,40 @@ import (
 
 	nrClient "github.com/newrelic/newrelic-client-go/newrelic"
 	"github.com/newrelic/newrelic-client-go/pkg/region"
-	"github.com/newrelic/newrelic-labs-sdk/pkg/integration"
+	"github.com/newrelic/newrelic-labs-sdk/pkg/integration/build"
 	"github.com/newrelic/newrelic-labs-sdk/pkg/integration/log"
 	"github.com/newrelic/newrelic-labs-sdk/pkg/integration/model"
 )
 
 type NewRelicExporter struct {
 	id				string
-	buildInfo		*integration.BuildInfo
-	NrClient      	*nrClient.NewRelic
+	integrationName	string
+	integrationId	string
+	buildInfo		build.BuildInfo
+	nrClient      	*nrClient.NewRelic
 	licenseKey		string
 	metricsUrl		string
 	dryRun			bool
 }
 
-func NewNewRelicExporter(id string, li *integration.LabsIntegration) *NewRelicExporter {
-	metricsUrl := getMetricsUrl(li.GetRegion())
+func NewNewRelicExporter(
+	id, integrationName, integrationId string,
+	nrClient *nrClient.NewRelic,
+	licenseKey string,
+	region region.Name,
+	dryRun bool,
+) *NewRelicExporter {
+	metricsUrl := getMetricsUrl(region)
 
 	return &NewRelicExporter{
 		id,
-		li.BuildInfo,
-		li.NrClient,
-		li.GetLicenseKey(),
+		integrationName,
+		integrationId,
+		build.GetBuildInfo(),
+		nrClient,
+		licenseKey,
 		metricsUrl,
-		li.DryRun,
+		dryRun,
 	}
 }
 
@@ -52,7 +62,7 @@ func (e *NewRelicExporter) ExportMetrics(
 		return err
 	}
 
-	NRPayload := newMetricsPayload(nrMetrics, e.buildInfo)
+	NRPayload := e.newMetricsPayload(nrMetrics)
 
 	json, err := json.Marshal([]interface{}{ NRPayload })
 	if err != nil {
@@ -91,10 +101,10 @@ func (e *NewRelicExporter) ExportEvents(
 			evt[k] = v
 		}
 
-		evt["instrumentation.name"] = e.buildInfo.Name
+		evt["instrumentation.name"] = e.integrationName
 		evt["instrumentation.provider"] = "newrelic-labs"
 		evt["instrumentation.version"] = e.buildInfo.Version
-		evt["collector.name"] = e.buildInfo.Id
+		evt["collector.name"] = e.integrationId
 
 		if e.dryRun || log.IsDebugEnabled() {
 			log.Debugf("event payload JSON follows")
@@ -105,14 +115,14 @@ func (e *NewRelicExporter) ExportEvents(
 			}
 		}
 
-		if err := e.NrClient.Events.EnqueueEvent(ctx, evt); err != nil {
+		if err := e.nrClient.Events.EnqueueEvent(ctx, evt); err != nil {
 			return fmt.Errorf("failed to enqueue event: %w", err)
 		}
 	}
 
 	log.Debugf("all events enqueued; flushing events")
 
-	return e.NrClient.Events.Flush()
+	return e.nrClient.Events.Flush()
 }
 
 func (e *NewRelicExporter) ExportLogs(
@@ -128,10 +138,10 @@ func (e *NewRelicExporter) ExportLogs(
 			l.Attributes,
 		}
 
-		logEntry.Attributes["instrumentation.name"] = e.buildInfo.Name
+		logEntry.Attributes["instrumentation.name"] = e.integrationName
 		logEntry.Attributes["instrumentation.provider"] = "newrelic-labs"
 		logEntry.Attributes["instrumentation.version"] = e.buildInfo.Version
-		logEntry.Attributes["collector.name"] = e.buildInfo.Id
+		logEntry.Attributes["collector.name"] = e.integrationId
 
 		if e.dryRun || log.IsDebugEnabled(){
 			log.Debugf("log payload JSON follows")
@@ -142,14 +152,14 @@ func (e *NewRelicExporter) ExportLogs(
 			}
 		}
 
-		if err := e.NrClient.Logs.EnqueueLogEntry(ctx, logEntry); err != nil {
+		if err := e.nrClient.Logs.EnqueueLogEntry(ctx, logEntry); err != nil {
 			return fmt.Errorf("failed to enqueue log: %w", err)
 		}
 	}
 
 	log.Debugf("all logs enqueued; flushing logs")
 
-	return e.NrClient.Logs.Flush()
+	return e.nrClient.Logs.Flush()
 }
 
 type NRLogEntry struct {
@@ -216,14 +226,16 @@ func processMetrics(metrics []model.Metric) ([]NRMetric, error) {
 	return nrMetrics, nil
 }
 
-func newMetricsPayload(nrMetrics []NRMetric, buildInfo *integration.BuildInfo) NRMetricsPayload {
+func (e *NewRelicExporter) newMetricsPayload(
+	nrMetrics []NRMetric,
+) NRMetricsPayload {
 	return NRMetricsPayload{
 		Common: NRMetricsCommon{
 			Attributes: map[string]interface{}{
-				"instrumentation.name": buildInfo.Name,
+				"instrumentation.name": e.integrationName,
 				"instrumentation.provider": "newrelic-labs",
-				"instrumentation.version": buildInfo.Version,
-				"collector.name": buildInfo.Id,
+				"instrumentation.version": e.buildInfo.Version,
+				"collector.name": e.integrationId,
 			},
 		},
 		Metrics: nrMetrics,

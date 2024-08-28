@@ -4,6 +4,7 @@ import (
 	nriSdkArgs "github.com/newrelic/infra-integrations-sdk/v4/args"
 	nriSdk "github.com/newrelic/infra-integrations-sdk/v4/integration"
 	nriSdkLog "github.com/newrelic/infra-integrations-sdk/v4/log"
+	"github.com/newrelic/newrelic-labs-sdk/pkg/integration/build"
 	"github.com/newrelic/newrelic-labs-sdk/pkg/integration/log"
 	"github.com/spf13/viper"
 )
@@ -20,18 +21,18 @@ var (
 )
 
 func NewInfraIntegration(
-	buildInfo *BuildInfo,
+	name, id string,
 	labsIntegrationOpts ...LabsIntegrationOpt,
 ) (*LabsIntegration, error) {
 	// Create the native infra integration
-	i, err := createInfraIntegration(buildInfo, log.RootLogger)
+	i, err := createInfraIntegration(id, log.RootLogger)
 	if err != nil {
 		return nil, err
 	}
 
 	// Maybe show the version info
 	if infraArgs.ShowVersion {
-		showVersionAndExit(buildInfo)
+		showVersionAndExit(name)
 	}
 
 	// Bind custom flag information to viper
@@ -51,10 +52,11 @@ func NewInfraIntegration(
 		return nil, err
 	}
 
-	defer log.Debugf("starting %s integration", buildInfo.Name)
+	defer log.Debugf("starting %s integration", name)
 
 	return newLabsIntegration(
-		buildInfo,
+		name,
+		id,
 		nil,
 		i,
 		log.RootLogger,
@@ -65,12 +67,12 @@ func NewInfraIntegration(
 }
 
 func createInfraIntegration(
-	buildInfo *BuildInfo,
+	id string,
 	logger nriSdkLog.Logger,
 ) (*nriSdk.Integration, error) {
 	return nriSdk.New(
-		buildInfo.Id,
-		buildInfo.Version,
+		id,
+		build.GetBuildInfo().Version,
 		nriSdk.Args(&infraArgs),
 		nriSdk.Logger(logger),
 	)

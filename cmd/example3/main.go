@@ -15,38 +15,83 @@ import (
 )
 
 const (
-	INTEGRATION_ID = "com.newrelic.labs.sdk.test2"
-	INTEGRATION_NAME = "Labs SDK Example 2"
+	INTEGRATION_ID = "com.newrelic.labs.sdk.test3"
+	INTEGRATION_NAME = "Labs SDK Example 3"
 )
 
-type ipify struct {
-	IpAddress string `json:"ip"`
+type echo struct {
+	Method string `json:"method"`
+	Protocol string `json:"protocol"`
+	Host string `json:"host"`
+	Path string `json:"path"`
+	Ip string `json:"ip"`
+	Headers map[string]string `json:"headers"`
+	ParsedQueryParams map[string]string `json:"parsedQueryParams"`
 }
 
-func newDecoder(num int) pipeline.LogsDecoderFunc {
+func newDecoder() pipeline.LogsDecoderFunc {
 	return func (
 		receiver pipeline.LogsReceiver,
 		in io.ReadCloser,
 		out chan <- model.Log,
 	) error {
-		ip := ipify{}
+		e := echo{}
 
 		dec := json.NewDecoder(in)
 
-		err := dec.Decode(&ip)
+		err := dec.Decode(&e)
 		if err != nil {
 			return err
 		}
 
-		log.Debugf("receiver %d: my IP is %s", num, string(ip.IpAddress))
 
-		iplog := model.NewLog(
-			fmt.Sprintf("receiver %d: my IP is %s", num, string(ip.IpAddress)),
-			map[string]interface{}{"ip": ip.IpAddress},
+		out <- model.NewLog(
+			fmt.Sprintf(
+				"method: %s: protocol: %s: host: %s: path: %s",
+				e.Method,
+				e.Protocol,
+				e.Host,
+				e.Path,
+			),
+			nil,
 			time.Now(),
 		)
 
-		out <- iplog
+		userAgent, ok := e.Headers["User-Agent"]
+		if ok {
+			out <- model.NewLog(
+				fmt.Sprintf(
+					"User-Agent: %s",
+					userAgent,
+				),
+				nil,
+				time.Now(),
+			)
+		}
+
+		accept, ok := e.Headers["Accept"]
+		if ok {
+			out <- model.NewLog(
+				fmt.Sprintf(
+					"Accept: %s",
+					accept,
+				),
+				nil,
+				time.Now(),
+			)
+		}
+
+		contentType, ok := e.Headers["Content-Type"]
+		if ok {
+			out <- model.NewLog(
+				fmt.Sprintf(
+					"Content-Type: %s",
+					contentType,
+				),
+				nil,
+				time.Now(),
+			)
+		}
 
 		return nil
 	}
@@ -61,11 +106,8 @@ func main() {
 		INTEGRATION_NAME,
 		INTEGRATION_ID,
 		INTEGRATION_NAME,
-		integration.WithLicenseKey(),
 		integration.WithApiKey(),
-		integration.WithAccountId(),
-		integration.WithClient(),
-		integration.WithEvents(ctx),
+		integration.WithLicenseKey(),
 		integration.WithLogs(ctx),
 	)
 	fatalIfErr(err)
@@ -74,14 +116,12 @@ func main() {
 	lp := pipeline.NewLogsPipeline()
 
 	// Create some receivers and add them to the pipeline
-	for i := 0; i < 10; i += 1 {
-		ipifyReceiver := pipeline.NewSimpleReceiver(
-			"ipify",
-			"https://api.ipify.org/?format=json",
-			pipeline.WithLogsDecoder(newDecoder(i)),
+	echoReceiver := pipeline.NewSimpleReceiver(
+			"echo",
+			"https://echo.free.beeceptor.com",
+			pipeline.WithLogsDecoder(newDecoder()),
 		)
-		lp.AddReceiver(ipifyReceiver)
-	}
+	lp.AddReceiver(echoReceiver)
 
 	// Create the newrelic exporter and add it to the pipeline
 	newRelicExporter := exporters.NewNewRelicExporter(

@@ -8,23 +8,30 @@ import (
 
 	nriSdkMetrics "github.com/newrelic/infra-integrations-sdk/v4/data/metric"
 	nriSdk "github.com/newrelic/infra-integrations-sdk/v4/integration"
-	"github.com/newrelic/newrelic-labs-sdk/pkg/integration"
+	"github.com/newrelic/newrelic-labs-sdk/pkg/integration/build"
 	"github.com/newrelic/newrelic-labs-sdk/pkg/integration/log"
 	"github.com/newrelic/newrelic-labs-sdk/pkg/integration/model"
 )
 
 type NewRelicInfraExporter struct {
 	id				string
-	buildInfo		*integration.BuildInfo
+	integrationName	string
+	integrationId	string
+	buildInfo		build.BuildInfo
 	i 				*nriSdk.Integration
 	entity			*nriSdk.Entity
 }
 
-func NewNewRelicInfraExporter(id string, li *integration.LabsIntegration) *NewRelicInfraExporter {
+func NewNewRelicInfraExporter(
+	id, integrationName, integrationId string,
+	i *nriSdk.Integration,
+) *NewRelicInfraExporter {
 	return &NewRelicInfraExporter{
 		id,
-		li.BuildInfo,
-		li.Integration,
+		integrationName,
+		integrationId,
+		build.GetBuildInfo(),
+		i,
 		nil,
 	}
 }
@@ -94,10 +101,10 @@ func (e *NewRelicInfraExporter) ExportLogs(
 
 func (e *NewRelicInfraExporter) addAttributes(metric *model.Metric, nriMetric nriSdkMetrics.Metric) {
 
-	nriMetric.AddDimension("instrumentation.name", e.buildInfo.Name)
+	nriMetric.AddDimension("instrumentation.name", e.integrationName)
 	nriMetric.AddDimension("instrumentation.provider", "newrelic-labs")
 	nriMetric.AddDimension("instrumentation.version", e.buildInfo.Version)
-	nriMetric.AddDimension("collector.name", e.buildInfo.Id)
+	nriMetric.AddDimension("collector.name", e.integrationId)
 
 	for k, v := range metric.Attributes {
 		switch val := v.(type) {
