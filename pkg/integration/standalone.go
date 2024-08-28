@@ -13,15 +13,14 @@ import (
 )
 
 func NewStandaloneIntegration(
-	buildInfo *BuildInfo,
-	appName string,
+	name, id, appName string,
 	labsIntegrationOpts ...LabsIntegrationOpt,
 ) (*LabsIntegration, error) {
 	// Parse args
 	parseStandaloneArgs()
 
 	// Maybe show the version info
-	err := maybeShowVersion(buildInfo)
+	err := maybeShowVersion(name)
 	if err != nil {
 		return nil, err
 	}
@@ -46,11 +45,12 @@ func NewStandaloneIntegration(
 		return nil, err
 	}
 
-	defer log.Debugf("starting %s integration", buildInfo.Name)
+	defer log.Debugf("starting %s integration", name)
 
 	// Create the integration
 	return newLabsIntegration(
-		buildInfo,
+		name,
+		id,
 		app,
 		nil,
 		log.RootLogger,
@@ -60,14 +60,14 @@ func NewStandaloneIntegration(
 	)
 }
 
-func maybeShowVersion(buildInfo *BuildInfo) error {
+func maybeShowVersion(integrationName string) error {
 	version, err := pflag.CommandLine.GetBool("version")
 	if err != nil {
 		return err
 	}
 
 	if version {
-		showVersionAndExit(buildInfo)
+		showVersionAndExit(integrationName)
 	}
 
 	return nil

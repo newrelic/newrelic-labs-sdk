@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"runtime"
 	"strings"
 	"time"
 
@@ -18,6 +19,7 @@ const (
 type HttpConnector struct {
 	Method        		string
 	Url           		string
+	UserAgent			string
 	Headers       		map[string]string
 	Body          		any
 	Authenticator 		HttpAuthenticator
@@ -107,6 +109,10 @@ func (c *HttpConnector) SetBody(body any) {
 	c.Body = body
 }
 
+func (c *HttpConnector) SetUserAgent(userAgent string) {
+	c.UserAgent = userAgent
+}
+
 func (c *HttpConnector) SetHeaders(headers map[string]string) {
 	c.Headers = headers
 }
@@ -126,6 +132,13 @@ func (c *HttpConnector) httpGet() (io.ReadCloser, error) {
 	for key, val := range c.Headers {
 		req.Header.Add(key, val)
 	}
+
+	userAgent := c.UserAgent
+	if userAgent == "" {
+		userAgent = GetUserAgent()
+	}
+
+	req.Header.Add("User-Agent", userAgent)
 
 	if c.Authenticator != nil {
 		log.Debugf("authenticating request for %s", c.Url)
@@ -180,6 +193,13 @@ func (c *HttpConnector) httpPost(reqBody io.Reader) (io.ReadCloser, error) {
 	for key, val := range c.Headers {
 		req.Header.Add(key, val)
 	}
+
+	userAgent := c.UserAgent
+	if userAgent == "" {
+		userAgent = GetUserAgent()
+	}
+
+	req.Header.Add("User-Agent", userAgent)
 
 	if c.Authenticator != nil {
 		log.Debugf("authenticating request for %s", c.Url)
@@ -241,4 +261,12 @@ func buildPostBody(b any) (io.Reader, error) {
 	default:
 		return nil, fmt.Errorf("unsupported type for body")
 	}
+}
+
+func GetUserAgent() string {
+	return fmt.Sprintf(
+		"newrelic-labs-sdk (%s; %s)",
+		runtime.GOOS,
+		runtime.GOARCH,
+	)
 }

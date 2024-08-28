@@ -6,8 +6,7 @@ import (
 )
 
 func NewLambdaIntegration(
-	buildInfo *BuildInfo,
-	appName string,
+	name, id, appName string,
 	labsIntegrationOpts ...LabsIntegrationOpt,
 ) (*LabsIntegration, error) {
 	// We don't setup/process command line flags since we are running as a
@@ -33,11 +32,12 @@ func NewLambdaIntegration(
 		return nil, err
 	}
 
-	defer log.Debugf("starting %s integration", buildInfo.Name)
+	defer log.Debugf("starting %s integration", name)
 
 	// Create the integration
 	return newLabsIntegration(
-		buildInfo,
+		name,
+		id,
 		app,
 		nil,		// this is not an infra integration
 		log.RootLogger,

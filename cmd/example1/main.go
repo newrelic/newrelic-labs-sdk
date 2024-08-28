@@ -12,20 +12,9 @@ import (
 	"github.com/newrelic/newrelic-labs-sdk/pkg/integration/pipeline"
 )
 
-var (
-	/* Args below are populated via ldflags at build time */
-	gIntegrationID      = "com.newrelic.labs.test"
-	gIntegrationName    = "Labs SDK Example 1"
-	gIntegrationVersion = "0.1.0"
-	gGitCommit          = ""
-	gBuildDate          = ""
-	gBuildInfo			= integration.BuildInfo{
-		Id:        gIntegrationID,
-		Name:      gIntegrationName,
-		Version:   gIntegrationVersion,
-		GitCommit: gGitCommit,
-		BuildDate: gBuildDate,
-	}
+const (
+	INTEGRATION_ID = "com.newrelic.labs.sdk.test1"
+	INTEGRATION_NAME = "Labs SDK Example 1"
 )
 
 type testComponent2 struct {
@@ -93,17 +82,17 @@ func (t *testComponent2) PollLogs(ctx context.Context, writer chan <- model.Log)
 }
 
 func main() {
-	// Create a new background context to us
+	// Create a new background context to use
 	ctx := context.Background()
 
 	// Create the integration with options
 	i, err := integration.NewStandaloneIntegration(
-		&gBuildInfo,
-		gBuildInfo.Name,
+		INTEGRATION_NAME,
+		INTEGRATION_ID,
+		INTEGRATION_NAME,
 		integration.WithLicenseKey(),
 		integration.WithApiKey(),
 		integration.WithAccountId(),
-		integration.WithClient(),
 		integration.WithEvents(ctx),
 		integration.WithLogs(ctx),
 	)
@@ -111,7 +100,15 @@ func main() {
 
 	// Create application components (receivers, processors, exporters)
 	component := &testComponent2{}
-	newRelicExporter := exporters.NewNewRelicExporter("newrelic", i)
+	newRelicExporter := exporters.NewNewRelicExporter(
+		"newrelic",
+		INTEGRATION_NAME,
+		INTEGRATION_ID,
+		i.NrClient,
+		i.GetLicenseKey(),
+		i.GetRegion(),
+		i.DryRun,
+	)
 
 	// Create one or more pipelines
 	mp := pipeline.NewMetricsPipeline()

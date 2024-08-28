@@ -125,3 +125,4 @@ config.yml
 dist/
 cf-params.json
 __tools/
+main

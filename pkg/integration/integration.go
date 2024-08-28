@@ -13,6 +13,7 @@ import (
 	"github.com/newrelic/go-agent/v3/newrelic"
 	nriSdk "github.com/newrelic/infra-integrations-sdk/v4/integration"
 	nrClient "github.com/newrelic/newrelic-client-go/newrelic"
+	"github.com/newrelic/newrelic-labs-sdk/pkg/integration/build"
 	"github.com/newrelic/newrelic-labs-sdk/pkg/integration/log"
 	"github.com/newrelic/newrelic-labs-sdk/pkg/integration/pipeline"
 
@@ -28,18 +29,17 @@ const (
 )
 
 type (
-	BuildInfo struct {
-		Id        string
-		Name      string
-		Version   string
-		GitCommit string
-		BuildDate string
-	}
 	LabsIntegrationOpt func(li *LabsIntegration) error
 )
 
+// @TODO: connectors Request() methods should take a context
+// @TODO: support custom tags via config
+// @TODO: connectors should take a Context
+
 type LabsIntegration struct {
-	BuildInfo		*BuildInfo
+	Name			string
+	Id				string
+	BuildInfo		build.BuildInfo
 	App           	*newrelic.Application
 	Integration   	*nriSdk.Integration
 	Logger        	*logrus.Logger
@@ -57,7 +57,7 @@ type LabsIntegration struct {
 }
 
 func newLabsIntegration(
-	buildInfo *BuildInfo,
+	name, id string,
 	app *newrelic.Application,
 	integration *nriSdk.Integration,
 	logger *logrus.Logger,
@@ -66,7 +66,9 @@ func newLabsIntegration(
 	labsIntegrationOpts []LabsIntegrationOpt,
 ) (*LabsIntegration, error) {
 	li := &LabsIntegration{
-		BuildInfo: buildInfo,
+		Name: name,
+		Id: id,
+		BuildInfo: build.GetBuildInfo(),
 		App: app,
 		Integration: integration,
 		Logger: logger,
@@ -116,16 +118,18 @@ func (i *LabsIntegration) Run(ctx context.Context) error {
 	return nil
 }
 
-func showVersionAndExit(buildInfo *BuildInfo) {
+func showVersionAndExit(integrationName string) {
+	buildInfo := build.GetBuildInfo()
+
 	// Show the version
 	fmt.Printf(
 		"%s Version: %s, Platform: %s, GoVersion: %s, GitCommit: %s, BuildDate: %s\n",
-		buildInfo.Name,
+		integrationName,
 		buildInfo.Version,
 		fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
 		runtime.Version(),
-		buildInfo.GitCommit,
-		buildInfo.BuildDate,
+		buildInfo.Commit,
+		buildInfo.Date,
 	)
 	os.Exit(0)
 }
