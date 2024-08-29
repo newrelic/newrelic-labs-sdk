@@ -10,9 +10,9 @@ import (
 
 	nrClient "github.com/newrelic/newrelic-client-go/newrelic"
 	"github.com/newrelic/newrelic-client-go/pkg/region"
-	"github.com/newrelic/newrelic-labs-sdk/pkg/integration/build"
-	"github.com/newrelic/newrelic-labs-sdk/pkg/integration/log"
-	"github.com/newrelic/newrelic-labs-sdk/pkg/integration/model"
+	"github.com/newrelic/newrelic-labs-sdk/v2/pkg/integration/build"
+	"github.com/newrelic/newrelic-labs-sdk/v2/pkg/integration/log"
+	"github.com/newrelic/newrelic-labs-sdk/v2/pkg/integration/model"
 )
 
 type NewRelicExporter struct {

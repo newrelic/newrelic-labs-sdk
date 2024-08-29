@@ -13,9 +13,9 @@ import (
 	"github.com/newrelic/go-agent/v3/newrelic"
 	nriSdk "github.com/newrelic/infra-integrations-sdk/v4/integration"
 	nrClient "github.com/newrelic/newrelic-client-go/newrelic"
-	"github.com/newrelic/newrelic-labs-sdk/pkg/integration/build"
-	"github.com/newrelic/newrelic-labs-sdk/pkg/integration/log"
-	"github.com/newrelic/newrelic-labs-sdk/pkg/integration/pipeline"
+	"github.com/newrelic/newrelic-labs-sdk/v2/pkg/integration/build"
+	"github.com/newrelic/newrelic-labs-sdk/v2/pkg/integration/log"
+	"github.com/newrelic/newrelic-labs-sdk/v2/pkg/integration/pipeline"
 
 	"github.com/newrelic/newrelic-client-go/pkg/config"
 	"github.com/newrelic/newrelic-client-go/pkg/logging"

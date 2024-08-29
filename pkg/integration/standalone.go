@@ -6,7 +6,7 @@ import (
 
 	"github.com/newrelic/go-agent/v3/integrations/logcontext-v2/nrlogrus"
 	"github.com/newrelic/go-agent/v3/newrelic"
-	"github.com/newrelic/newrelic-labs-sdk/pkg/integration/log"
+	"github.com/newrelic/newrelic-labs-sdk/v2/pkg/integration/log"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"

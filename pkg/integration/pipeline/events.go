@@ -5,7 +5,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/newrelic/newrelic-labs-sdk/pkg/integration/model"
+	"github.com/newrelic/newrelic-labs-sdk/v2/pkg/integration/model"
 )
 
 type EventsReceiver interface {
