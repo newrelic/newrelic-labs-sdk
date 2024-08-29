@@ -1,4 +1,4 @@
-module github.com/newrelic/newrelic-labs-sdk
+module github.com/newrelic/newrelic-labs-sdk/v2
 
 go 1.20
 
