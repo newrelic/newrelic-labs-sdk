@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/newrelic/newrelic-labs-sdk/pkg/integration/log"
+	"github.com/newrelic/newrelic-labs-sdk/v2/pkg/integration/log"
 )
 
 const (

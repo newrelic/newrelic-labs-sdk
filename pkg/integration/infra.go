@@ -4,8 +4,8 @@ import (
 	nriSdkArgs "github.com/newrelic/infra-integrations-sdk/v4/args"
 	nriSdk "github.com/newrelic/infra-integrations-sdk/v4/integration"
 	nriSdkLog "github.com/newrelic/infra-integrations-sdk/v4/log"
-	"github.com/newrelic/newrelic-labs-sdk/pkg/integration/build"
-	"github.com/newrelic/newrelic-labs-sdk/pkg/integration/log"
+	"github.com/newrelic/newrelic-labs-sdk/v2/pkg/integration/build"
+	"github.com/newrelic/newrelic-labs-sdk/v2/pkg/integration/log"
 	"github.com/spf13/viper"
 )
 
