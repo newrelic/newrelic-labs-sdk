@@ -7,7 +7,7 @@ type (
 )
 
 type Exporter[T interface{}] interface {
-	Component
+	GetId() string
 	Export(context.Context, []T) error
 }
 

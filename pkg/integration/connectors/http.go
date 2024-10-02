@@ -55,22 +55,7 @@ func NewHttpPostConnector(
 }
 
 func (c *HttpConnector) Request() (io.ReadCloser, error) {
-	switch strings.ToLower(c.Method) {
-	case "get":
-		return c.httpGet()
-		//return []byte(res), err
-
-	case "post":
-		reader, err := buildPostBody(c.Body)
-		if err != nil {
-			return nil, err
-		}
-
-		return c.httpPost(reader)
-
-	default:
-		return nil, fmt.Errorf("unsupported HTTP method")
-	}
+	return c.request()
 }
 
 func (c *HttpConnector) RequestBytes() ([]byte, error) {
@@ -121,10 +106,27 @@ func (c *HttpConnector) SetTimeout(timeout time.Duration) {
 	c.Timeout = timeout
 }
 
-func (c *HttpConnector) httpGet() (io.ReadCloser, error) {
-	log.Debugf("creating HTTP GET request for %s", c.Url)
+func (c *HttpConnector) request() (io.ReadCloser, error) {
+	method := c.Method
+	if method != "" {
+		method = strings.ToUpper(method)
+	}
 
-	req, err := http.NewRequest("GET", c.Url, nil)
+	log.Debugf("creating HTTP %s request for %s", method, c.Url)
+
+	var (
+		body 	io.Reader
+		err 	error
+	)
+
+	if c.Body != nil {
+		body, err = buildPostBody(c.Body)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	req, err := http.NewRequest(method, c.Url, body)
 	if err != nil {
 		return nil, err
 	}
@@ -172,67 +174,8 @@ func (c *HttpConnector) httpGet() (io.ReadCloser, error) {
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf(
-			"error connecting to %s with status %d",
-			c.Url,
-			resp.StatusCode,
-		)
-	}
+		resp.Body.Close()
 
-	return resp.Body, nil
-}
-
-func (c *HttpConnector) httpPost(reqBody io.Reader) (io.ReadCloser, error) {
-	log.Debugf("creating HTTP POST request for %s", c.Url)
-
-	req, err := http.NewRequest("POST", c.Url, reqBody)
-	if err != nil {
-		return nil, err
-	}
-
-	for key, val := range c.Headers {
-		req.Header.Add(key, val)
-	}
-
-	userAgent := c.UserAgent
-	if userAgent == "" {
-		userAgent = GetUserAgent()
-	}
-
-	req.Header.Add("User-Agent", userAgent)
-
-	if c.Authenticator != nil {
-		log.Debugf("authenticating request for %s", c.Url)
-		err = c.Authenticator.Authenticate(c, req)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	client := http.DefaultClient
-	client.Timeout = c.Timeout
-
-	log.Debugf("performing request for %s", c.Url)
-	resp, err := client.Do(req)
-
-	if err != nil {
-		if resp != nil {
-			return nil, fmt.Errorf(
-				"error connecting to %s with status %d: %w",
-				c.Url,
-				resp.StatusCode,
-				err,
-			)
-		}
-
-		return nil, fmt.Errorf(
-			"error connecting to %s: %w",
-			c.Url,
-			err,
-		)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf(
 			"error connecting to %s with status %d",
 			c.Url,

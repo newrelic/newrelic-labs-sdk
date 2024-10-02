@@ -63,20 +63,17 @@ func main() {
 		INTEGRATION_NAME,
 		integration.WithLicenseKey(),
 		integration.WithApiKey(),
-		integration.WithAccountId(),
-		integration.WithClient(),
-		integration.WithEvents(ctx),
 		integration.WithLogs(ctx),
 	)
 	fatalIfErr(err)
 
 	// Create a logs pipeline
-	lp := pipeline.NewLogsPipeline()
+	lp := pipeline.NewLogsPipeline("ipify-logs-pipeline")
 
 	// Create some receivers and add them to the pipeline
 	for i := 0; i < 10; i += 1 {
 		ipifyReceiver := pipeline.NewSimpleReceiver(
-			"ipify",
+			"ipify-receiver",
 			"https://api.ipify.org/?format=json",
 			pipeline.WithLogsDecoder(newDecoder(i)),
 		)
@@ -96,7 +93,7 @@ func main() {
 	lp.AddExporter(newRelicExporter)
 
 	// Register the pipeline with the integration
-	i.AddPipeline(lp)
+	i.AddComponent(lp)
 
 	// Run the integration
 	defer i.Shutdown(ctx)

@@ -62,7 +62,7 @@ func NewInfraIntegration(
 		log.RootLogger,
 		false,
 		false,
-		labsIntegrationOpts,
+		labsIntegrationOpts...,
 	)
 }
 

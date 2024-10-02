@@ -18,17 +18,6 @@ const (
 
 var gPollSignal = struct{}{}
 
-type Pipeline interface {
-	Start(ctx context.Context, wg *sync.WaitGroup) error
-	Execute(ctx context.Context) error
-	ExecuteSync(ctx context.Context) []error
-	Shutdown(ctx context.Context) error
-}
-
-type Component interface {
-	GetId() string
-}
-
 type PipelineInstance[T interface{}] struct {
 	pollChan	chan struct{}
 	receivers 	[]Receiver[T]
@@ -40,6 +29,7 @@ type PipelineInstance[T interface{}] struct {
 }
 
 type pipeline[T interface{}] struct {
+	id				string
 	receivers 		[]Receiver[T]
 	processorList 	*ProcessorList[T]
 	exporters		[]Exporter[T]
@@ -63,7 +53,7 @@ func executeSync[T interface{}](
 	receivers []Receiver[T],
 	processorList *ProcessorList[T],
 	exporters []Exporter[T],
-) []error {
+) error {
 	var wg sync.WaitGroup
 
 	log.Debugf("executing synchronous pipeline")
@@ -83,7 +73,7 @@ func executeSync[T interface{}](
 		dataChan,
 		exportChan,
 		resultChan,
-		true,
+		//true,
 	)
 
 	wg.Add(1)
@@ -118,13 +108,15 @@ func executeSync[T interface{}](
 	close(dataChan)
 	wg.Wait()
 
-	close(resultChan)
-
 	if (len(errs) > 0) {
-		log.Debugf("completed with errors: %v", errors.Join(errs...))
+		err := errors.Join(errs...)
+
+		log.Debugf("completed with errors: %v", err)
+
+		return err
 	}
 
-	return errs
+	return nil
 }
 
 func start[T interface{}](
@@ -192,7 +184,7 @@ func start[T interface{}](
 			instance.dataChan,
 			instance.exportChan,
 			instance.resultChan,
-			false,
+			//false,
 		)
 
 		log.Debugf("starting exporter worker %d", i)
@@ -222,10 +214,11 @@ func shutdown[T interface{}](
 	instances []PipelineInstance[T],
 ) error {
 	for _, instance := range instances {
+		// Closing the poll channel will shutdown the receiver worker which will
+		// then shutdown the data channel which will shutdown the processor
+		// worker which will close the export channel, then the exporter worker
+		// will close the result channel and shutdown the export worker
 		close(instance.pollChan)
-		close(instance.dataChan)
-		close(instance.exportChan)
-		close(instance.resultChan)
 	}
 
 	return nil
@@ -246,6 +239,7 @@ func receiverWorker[T interface{}](
 		case _, ok := <- pollChan:
 			if !ok {
 				resultChan <- nil
+				close(dataChan)
 				return
 			}
 
@@ -291,7 +285,7 @@ func processorWorker[T any](
 	dataChan chan T,
 	exportChan chan []T,
 	resultChan chan error,
-	closeOnCompletion bool,
+	//closeOnCompletion bool,
 ) {
 	defer wg.Done()
 
@@ -324,10 +318,15 @@ func processorWorker[T any](
 					resultChan <- err
 				}
 
-				if closeOnCompletion {
+				// @todo: Not sure what the original purpose of this flag was
+				// but I do not think it is needed. Once the processor is done,
+				// nothing more will be sent to the exporter so closing the
+				// channel will signal nothing more is coming and the exporter
+				// can shutdown.
+				//if closeOnCompletion {
 					log.Debugf("closing export channel")
 					close(exportChan)
-				}
+				//}
 				return
 			}
 
@@ -380,6 +379,11 @@ func exporterWorker[T any](
 		case data, ok := <- exportChan:
 			if !ok {
 				log.Debugf("exporter channel closed")
+				// If the exporter channel is closed, it means the receiver
+				// and processor have shutdown so they won't send anything else
+				// on the result channel so shut it down. This will stop the
+				// result worker and release the wait group lock.
+				close(resultChan)
 				return
 			}
 

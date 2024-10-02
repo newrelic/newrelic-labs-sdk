@@ -17,16 +17,16 @@ const (
 	INTEGRATION_NAME = "Labs SDK Example 1"
 )
 
-type testComponent2 struct {
+type testReceiver struct {
 }
 
-func (t *testComponent2) GetId() string {
-	return "test-component-2"
+func (t *testReceiver) GetId() string {
+	return "test-receiver"
 }
 
 // This shows how you can manually generate metrics by implementing PollMetrics
 // directly on a component instead of going through one of the HTTP receivers.
-func (t *testComponent2) PollMetrics(ctx context.Context, writer chan <- model.Metric) error {
+func (t *testReceiver) PollMetrics(ctx context.Context, writer chan <- model.Metric) error {
 	// Logging is automatically configured and available to you
 	log.Debugf("generating test SDK metrics")
 
@@ -43,7 +43,7 @@ func (t *testComponent2) PollMetrics(ctx context.Context, writer chan <- model.M
 
 // This shows how you can manually generate events by implementing PollEvents
 // directly on a component instead of going through one of the HTTP receivers.
-func (t *testComponent2) PollEvents(ctx context.Context, writer chan <- model.Event) error {
+func (t *testReceiver) PollEvents(ctx context.Context, writer chan <- model.Event) error {
 	// Logging is automatically configured and available to you
 	log.Debugf("generating test FibonnaciNumber events")
 
@@ -66,7 +66,7 @@ func (t *testComponent2) PollEvents(ctx context.Context, writer chan <- model.Ev
 
 // This shows how you can manually generate log by implementing PollLogs
 // directly on a component instead of going through one of the HTTP receivers.
-func (t *testComponent2) PollLogs(ctx context.Context, writer chan <- model.Log) error {
+func (t *testReceiver) PollLogs(ctx context.Context, writer chan <- model.Log) error {
 	// Logging is automatically configured and available to you
 	log.Debugf("generating test logs")
 
@@ -99,7 +99,7 @@ func main() {
 	fatalIfErr(err)
 
 	// Create application components (receivers, processors, exporters)
-	component := &testComponent2{}
+	component := &testReceiver{}
 	newRelicExporter := exporters.NewNewRelicExporter(
 		"newrelic",
 		INTEGRATION_NAME,
@@ -111,22 +111,22 @@ func main() {
 	)
 
 	// Create one or more pipelines
-	mp := pipeline.NewMetricsPipeline()
+	mp := pipeline.NewMetricsPipeline("example-metrics-pipeline")
 	mp.AddReceiver(component)
 	mp.AddExporter(newRelicExporter)
 
-	ep := pipeline.NewEventsPipeline()
+	ep := pipeline.NewEventsPipeline("example-events-pipeline")
 	ep.AddReceiver(component)
 	ep.AddExporter(newRelicExporter)
 
-	lp := pipeline.NewLogsPipeline()
+	lp := pipeline.NewLogsPipeline("example-logs-pipeline")
 	lp.AddReceiver(component)
 	lp.AddExporter(newRelicExporter)
 
 	// Register the pipelines with the integration
-	i.AddPipeline(mp)
-	i.AddPipeline(ep)
-	i.AddPipeline(lp)
+	i.AddComponent(mp)
+	i.AddComponent(ep)
+	i.AddComponent(lp)
 
 	// Run the integration
 	defer i.Shutdown(ctx)

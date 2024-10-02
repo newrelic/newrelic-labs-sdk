@@ -9,7 +9,7 @@ import (
 )
 
 type EventsReceiver interface {
-	Component
+	GetId() string
 	PollEvents(context context.Context, writer chan <- model.Event) error
 }
 
@@ -20,14 +20,15 @@ type EventsDecoderFunc func(
 ) error
 
 type EventsExporter interface {
-	Component
+	GetId() string
 	ExportEvents(ctx context.Context, events []model.Event) error
 }
 
 type EventsPipeline pipeline[model.Event]
 
-func NewEventsPipeline() *EventsPipeline {
+func NewEventsPipeline(id string) *EventsPipeline {
 	return &EventsPipeline{
+		id: id,
 		receivers: []Receiver[model.Event]{},
 		processorList: &ProcessorList[model.Event]{},
 		exporters: []Exporter[model.Event]{},
@@ -52,11 +53,15 @@ func (p *EventsPipeline) AddExporter(exporter EventsExporter) {
 	)
 }
 
+func (p *EventsPipeline) GetId() string {
+	return p.id
+}
+
 func (p *EventsPipeline) Execute(ctx context.Context) error {
 	return execute(ctx, p.instances)
 }
 
-func (p *EventsPipeline) ExecuteSync(ctx context.Context) []error {
+func (p *EventsPipeline) ExecuteSync(ctx context.Context) error {
 	return executeSync[model.Event](
 		ctx,
 		p.receivers,

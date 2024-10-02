@@ -113,11 +113,11 @@ func main() {
 	fatalIfErr(err)
 
 	// Create a logs pipeline
-	lp := pipeline.NewLogsPipeline()
+	lp := pipeline.NewLogsPipeline("echo-header-logs-pipeline")
 
 	// Create some receivers and add them to the pipeline
 	echoReceiver := pipeline.NewSimpleReceiver(
-			"echo",
+			"echo-receiver",
 			"https://echo.free.beeceptor.com",
 			pipeline.WithLogsDecoder(newDecoder()),
 		)
@@ -136,7 +136,7 @@ func main() {
 	lp.AddExporter(newRelicExporter)
 
 	// Register the pipeline with the integration
-	i.AddPipeline(lp)
+	i.AddComponent(lp)
 
 	// Run the integration
 	defer i.Shutdown(ctx)

@@ -43,6 +43,6 @@ func NewLambdaIntegration(
 		log.RootLogger,
 		false,		// can't run as service when running as a lambda
 		viper.GetBool("dry_run"),
-		labsIntegrationOpts,
+		labsIntegrationOpts...,
 	)
 }

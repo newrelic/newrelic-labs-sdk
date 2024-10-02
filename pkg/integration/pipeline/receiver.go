@@ -15,7 +15,7 @@ type (
 )
 
 type Receiver[T interface{}] interface {
-	Component
+	GetId() string
 	Poll(context.Context, chan <- T) error
 }
 
@@ -128,6 +128,8 @@ func (s *SimpleReceiver) PollMetrics(
 		return err
 	}
 
+	defer data.Close()
+
 	err = s.metricsDecoder(s, data, metricChan)
 	if err != nil {
 		return err
@@ -146,6 +148,8 @@ func (s *SimpleReceiver) PollEvents(
 		return err
 	}
 
+	defer data.Close()
+
 	err = s.eventsDecoder(s, data, out)
 	if err != nil {
 		return err
@@ -162,6 +166,8 @@ func (s *SimpleReceiver) PollLogs(
 	if err != nil {
 		return err
 	}
+
+	defer data.Close()
 
 	err = s.logsDecoder(s, data, out)
 	if err != nil {

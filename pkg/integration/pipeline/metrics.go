@@ -9,7 +9,7 @@ import (
 )
 
 type MetricsReceiver interface {
-	Component
+	GetId() string
 	PollMetrics(context context.Context, writer chan <- model.Metric) error
 }
 
@@ -20,14 +20,15 @@ type MetricsDecoderFunc func(
 ) error
 
 type MetricsExporter interface {
-	Component
+	GetId() string
 	ExportMetrics(ctx context.Context, metrics []model.Metric) error
 }
 
 type MetricsPipeline pipeline[model.Metric]
 
-func NewMetricsPipeline() *MetricsPipeline {
+func NewMetricsPipeline(id string) *MetricsPipeline {
 	return &MetricsPipeline{
+		id: id,
 		receivers: []Receiver[model.Metric]{},
 		processorList: &ProcessorList[model.Metric]{},
 		exporters: []Exporter[model.Metric]{},
@@ -52,11 +53,15 @@ func (p *MetricsPipeline) AddExporter(exporter MetricsExporter) {
 	)
 }
 
+func (p *MetricsPipeline) GetId() string {
+	return p.id
+}
+
 func (p *MetricsPipeline) Execute(ctx context.Context) error {
 	return execute(ctx, p.instances)
 }
 
-func (p *MetricsPipeline) ExecuteSync(ctx context.Context) []error {
+func (p *MetricsPipeline) ExecuteSync(ctx context.Context) error {
 	return executeSync[model.Metric](
 		ctx,
 		p.receivers,
