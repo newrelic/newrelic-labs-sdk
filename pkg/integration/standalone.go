@@ -56,7 +56,7 @@ func NewStandaloneIntegration(
 		log.RootLogger,
 		viper.GetBool("runAsService"),
 		viper.GetBool("dry_run"),
-		labsIntegrationOpts,
+		labsIntegrationOpts...,
 	)
 }
 

@@ -5,7 +5,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/newrelic/newrelic-client-go/pkg/region"
+	"github.com/newrelic/newrelic-client-go/v2/pkg/region"
 	"github.com/spf13/viper"
 )
 

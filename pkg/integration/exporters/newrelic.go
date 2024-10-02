@@ -1,15 +1,11 @@
 package exporters
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 
-	nrClient "github.com/newrelic/newrelic-client-go/newrelic"
-	"github.com/newrelic/newrelic-client-go/pkg/region"
+	nrClient "github.com/newrelic/newrelic-client-go/v2/newrelic"
+	"github.com/newrelic/newrelic-client-go/v2/pkg/region"
 	"github.com/newrelic/newrelic-labs-sdk/v2/pkg/integration/build"
 	"github.com/newrelic/newrelic-labs-sdk/v2/pkg/integration/log"
 	"github.com/newrelic/newrelic-labs-sdk/v2/pkg/integration/model"
@@ -21,8 +17,8 @@ type NewRelicExporter struct {
 	integrationId	string
 	buildInfo		build.BuildInfo
 	nrClient      	*nrClient.NewRelic
+	metricsClient	*NewRelicMetricsClient
 	licenseKey		string
-	metricsUrl		string
 	dryRun			bool
 }
 
@@ -33,16 +29,20 @@ func NewNewRelicExporter(
 	region region.Name,
 	dryRun bool,
 ) *NewRelicExporter {
-	metricsUrl := getMetricsUrl(region)
-
 	return &NewRelicExporter{
 		id,
 		integrationName,
 		integrationId,
 		build.GetBuildInfo(),
 		nrClient,
+		NewNewRelicMetricsClient(
+			integrationName,
+			integrationId,
+			licenseKey,
+			region,
+			dryRun,
+		),
 		licenseKey,
-		metricsUrl,
 		dryRun,
 	}
 }
@@ -62,28 +62,7 @@ func (e *NewRelicExporter) ExportMetrics(
 		return err
 	}
 
-	NRPayload := e.newMetricsPayload(nrMetrics)
-
-	json, err := json.Marshal([]interface{}{ NRPayload })
-	if err != nil {
-		return err
-	}
-
-	if e.dryRun || log.IsDebugEnabled() {
-		log.Debugf("metrics payload JSON follows")
-		log.PrettyPrintJson(NRPayload)
-
-		if e.dryRun {
-			return nil
-		}
-	}
-
-	err = e.postMetrics(json)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return e.metricsClient.PostMetrics(nrMetrics)
 }
 
 func (e *NewRelicExporter) ExportEvents(
@@ -100,6 +79,8 @@ func (e *NewRelicExporter) ExportEvents(
 		for k, v := range event.Attributes {
 			evt[k] = v
 		}
+
+		evt["timestamp"] = event.Timestamp
 
 		evt["instrumentation.name"] = e.integrationName
 		evt["instrumentation.provider"] = "newrelic-labs"
@@ -168,30 +149,6 @@ type NRLogEntry struct {
 	Attributes map[string]interface{}	`json:"attributes"`
 }
 
-// based on https://github.com/atlassian/gostatsd/blob/master/pkg/backends/newrelic/newrelic.go
-
-// NRMetricsPayload represents New Relic Metrics Payload format
-// https://docs.newrelic.com/docs/data-ingest-apis/get-data-new-relic/metric-api/report-metrics-metric-api#new-relic-guidelines
-type NRMetricsPayload struct {
-	Common  NRMetricsCommon `json:"common"`
-	Metrics []NRMetric   	`json:"metrics"`
-}
-
-// NRMetricsCommon common attributes to apply for New Relic Metrics Format
-type NRMetricsCommon struct {
-	Attributes map[string]interface{} `json:"attributes"`
-}
-
-// NRMetric metric for New Relic Metrics Format
-type NRMetric struct {
-	Name       string                 `json:"name"`
-	Value      interface{}            `json:"value,omitempty"`
-	Type       string                 `json:"type,omitempty"`
-	Timestamp  int64                  `json:"timestamp,omitempty"`
-	Attributes map[string]interface{} `json:"attributes,omitempty"`
-	IntervalMs float64                `json:"interval.ms,omitempty"`
-}
-
 func processMetrics(metrics []model.Metric) ([]NRMetric, error) {
 	nrMetrics := []NRMetric{}
 
@@ -224,69 +181,4 @@ func processMetrics(metrics []model.Metric) ([]NRMetric, error) {
 	}
 
 	return nrMetrics, nil
-}
-
-func (e *NewRelicExporter) newMetricsPayload(
-	nrMetrics []NRMetric,
-) NRMetricsPayload {
-	return NRMetricsPayload{
-		Common: NRMetricsCommon{
-			Attributes: map[string]interface{}{
-				"instrumentation.name": e.integrationName,
-				"instrumentation.provider": "newrelic-labs",
-				"instrumentation.version": e.buildInfo.Version,
-				"collector.name": e.integrationId,
-			},
-		},
-		Metrics: nrMetrics,
-	}
-}
-
-func (e *NewRelicExporter) postMetrics(json []byte) error {
-	headers := map[string]string{
-		"Content-Type": "application/json",
-		"Api-Key": e.licenseKey,
-	}
-
-	req, err := http.NewRequest("POST", e.metricsUrl, bytes.NewBuffer(json))
-	if err != nil {
-		return fmt.Errorf("unable to create http.Request: %w", err)
-	}
-
-	for header, v := range headers {
-		req.Header.Set(header, v)
-	}
-
-	log.Debugf("posting metrics to New Relic endpoint %s", e.metricsUrl)
-
-	client := http.DefaultClient
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("error posting: %s", err.Error())
-	}
-
-	defer resp.Body.Close()
-
-	log.Debugf("http status code received: %d", resp.StatusCode)
-
-	if (log.IsDebugEnabled()) {
-		log.Debugf("metrics response JSON follows")
-
-		body, _ := io.ReadAll(resp.Body)
-		log.Debugf("%s", string(body))
-	}
-
-	if resp.StatusCode < http.StatusOK || resp.StatusCode > http.StatusNoContent {
-		return fmt.Errorf("received bad status code %d", resp.StatusCode)
-	}
-
-	return nil
-}
-
-func getMetricsUrl(nrRegion region.Name) string {
-	if nrRegion == region.EU {
-		return "https://metric-api.eu.newrelic.com/metric/v1"
-	}
-
-	return "https://metric-api.newrelic.com/metric/v1"
 }

@@ -9,7 +9,7 @@ import (
 )
 
 type LogsReceiver interface {
-	Component
+	GetId() string
 	PollLogs(context context.Context, writer chan <- model.Log) error
 }
 
@@ -20,14 +20,15 @@ type LogsDecoderFunc func(
 ) error
 
 type LogsExporter interface {
-	Component
+	GetId() string
 	ExportLogs(ctx context.Context, logs []model.Log) error
 }
 
 type LogsPipeline pipeline[model.Log]
 
-func NewLogsPipeline() *LogsPipeline {
+func NewLogsPipeline(id string) *LogsPipeline {
 	return &LogsPipeline{
+		id: id,
 		receivers: []Receiver[model.Log]{},
 		processorList: &ProcessorList[model.Log]{},
 		exporters: []Exporter[model.Log]{},
@@ -52,11 +53,15 @@ func (p *LogsPipeline) AddExporter(exporter LogsExporter) {
 	)
 }
 
+func (p *LogsPipeline) GetId() string {
+	return p.id
+}
+
 func (p *LogsPipeline) Execute(ctx context.Context) error {
 	return execute(ctx, p.instances)
 }
 
-func (p *LogsPipeline) ExecuteSync(ctx context.Context) []error {
+func (p *LogsPipeline) ExecuteSync(ctx context.Context) error {
 	return executeSync[model.Log](
 		ctx,
 		p.receivers,
