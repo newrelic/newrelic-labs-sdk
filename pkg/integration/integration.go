@@ -820,6 +820,10 @@ func (i *LabsIntegration) UseLastUpdate(
 }
 
 func (i *LabsIntegration) flushDataAndWait() error {
+	// Let the nrClient catch up writing data to its internal queues before
+	// flushing so we don't flush before the data is all written.
+	<-time.After(3 * time.Second)
+
 	if i.eventsEnabled {
 		err := i.NrClient.Events.Flush()
 		if err != nil {
@@ -834,6 +838,7 @@ func (i *LabsIntegration) flushDataAndWait() error {
 		}
 	}
 
+	// Let the nrClient finishing sending data to New Relic
 	<-time.After(3 * time.Second)
 
 	return nil

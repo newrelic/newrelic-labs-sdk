@@ -72,7 +72,7 @@ func (t *testReceiver) PollLogs(ctx context.Context, writer chan <- model.Log) e
 
 	for i := 0; i < 100; i += 1 {
 		writer <- model.NewLog(
-			"Lorem ipsum dolor sit amet",
+			fmt.Sprintf("Lorem ipsum dolor sit amet %d", i),
 			map[string]any { "Foo": "Bar", "Beep": "Boop" },
 			time.Now(),
 		)
