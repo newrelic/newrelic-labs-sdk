@@ -14,11 +14,11 @@ import (
 	"github.com/newrelic/go-agent/v3/newrelic"
 	nriSdk "github.com/newrelic/infra-integrations-sdk/v4/integration"
 	nrClient "github.com/newrelic/newrelic-client-go/v2/newrelic"
+	"github.com/newrelic/newrelic-client-go/v2/pkg/config"
 	"github.com/newrelic/newrelic-client-go/v2/pkg/nrdb"
 	"github.com/newrelic/newrelic-labs-sdk/v2/pkg/integration/build"
 	"github.com/newrelic/newrelic-labs-sdk/v2/pkg/integration/log"
 
-	"github.com/newrelic/newrelic-client-go/v2/pkg/config"
 	"github.com/newrelic/newrelic-client-go/v2/pkg/logging"
 	"github.com/newrelic/newrelic-client-go/v2/pkg/region"
 	"github.com/sirupsen/logrus"
@@ -844,7 +844,6 @@ func (i *LabsIntegration) flushDataAndWait() error {
 	return nil
 }
 
-
 func configLicenseKey(licenseKey string) nrClient.ConfigOption {
 	return func(cfg *config.Config) error {
 		cfg.LicenseKey = licenseKey
@@ -925,6 +924,7 @@ func setupClient(li *LabsIntegration) error {
 
 	if li.licenseKey != "" {
 		opts = append(opts, configLicenseKey(li.licenseKey))
+		opts = append(opts, nrClient.ConfigInsightsInsertKey(li.licenseKey))
 	}
 
 	if li.apiKey != "" {
