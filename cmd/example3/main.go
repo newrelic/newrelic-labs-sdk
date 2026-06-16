@@ -2,9 +2,8 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
+	"runtime/metrics"
 	"time"
 
 	"github.com/newrelic/newrelic-labs-sdk/v2/pkg/integration"
@@ -19,82 +18,44 @@ const (
 	INTEGRATION_NAME = "Labs SDK Example 3"
 )
 
-type echo struct {
-	Method string `json:"method"`
-	Protocol string `json:"protocol"`
-	Host string `json:"host"`
-	Path string `json:"path"`
-	Ip string `json:"ip"`
-	Headers map[string]string `json:"headers"`
-	ParsedQueryParams map[string]string `json:"parsedQueryParams"`
+type runtimeMetricReceiver struct {
 }
 
-func newDecoder() pipeline.LogsDecoderFunc {
-	return func (
-		receiver pipeline.LogsReceiver,
-		in io.ReadCloser,
-		out chan <- model.Log,
-	) error {
-		e := echo{}
+func (t *runtimeMetricReceiver) GetId() string {
+	return "runtime-metric-receiver"
+}
 
-		dec := json.NewDecoder(in)
+// This shows how you can manually generate metrics by implementing PollMetrics
+// directly on a component instead of going through one of the HTTP receivers.
+func (t *runtimeMetricReceiver) PollMetrics(
+	ctx context.Context,
+	writer chan <- model.Metric,
+) error {
+	// Example taken from https://pkg.go.dev/runtime/metrics@go1.23.1#example-Read-ReadingOneMetric
 
-		err := dec.Decode(&e)
-		if err != nil {
-			return err
-		}
+	// Logging is automatically configured and available to you
+	log.Debugf("generating test SDK metrics")
 
+	const myMetric = "/memory/classes/heap/free:bytes"
 
-		out <- model.NewLog(
-			fmt.Sprintf(
-				"method: %s: protocol: %s: host: %s: path: %s",
-				e.Method,
-				e.Protocol,
-				e.Host,
-				e.Path,
-			),
-			nil,
-			time.Now(),
-		)
+	sample := make([]metrics.Sample, 1)
+	sample[0].Name = myMetric
 
-		userAgent, ok := e.Headers["User-Agent"]
-		if ok {
-			out <- model.NewLog(
-				fmt.Sprintf(
-					"User-Agent: %s",
-					userAgent,
-				),
-				nil,
-				time.Now(),
-			)
-		}
+	metrics.Read(sample)
 
-		accept, ok := e.Headers["Accept"]
-		if ok {
-			out <- model.NewLog(
-				fmt.Sprintf(
-					"Accept: %s",
-					accept,
-				),
-				nil,
-				time.Now(),
-			)
-		}
-
-		contentType, ok := e.Headers["Content-Type"]
-		if ok {
-			out <- model.NewLog(
-				fmt.Sprintf(
-					"Content-Type: %s",
-					contentType,
-				),
-				nil,
-				time.Now(),
-			)
-		}
-
-		return nil
+	if sample[0].Value.Kind() == metrics.KindBad {
+		return fmt.Errorf("metric %q no longer supported", myMetric)
 	}
+
+	freeBytes := sample[0].Value.Uint64()
+
+	writer <- model.NewGaugeMetric(
+		"labs.sdk.test.memory.heapFree",
+		model.MakeNumeric(int64(freeBytes)),
+		time.Now(),
+	)
+
+	return nil
 }
 
 func main() {
@@ -109,21 +70,12 @@ func main() {
 		integration.WithApiKey(),
 		integration.WithLicenseKey(),
 		integration.WithLogs(ctx),
+		integration.WithLastUpdate(),
 	)
 	fatalIfErr(err)
 
-	// Create a logs pipeline
-	lp := pipeline.NewLogsPipeline("echo-header-logs-pipeline")
-
-	// Create some receivers and add them to the pipeline
-	echoReceiver := pipeline.NewSimpleReceiver(
-			"echo-receiver",
-			"https://echo.free.beeceptor.com",
-			pipeline.WithLogsDecoder(newDecoder()),
-		)
-	lp.AddReceiver(echoReceiver)
-
-	// Create the newrelic exporter and add it to the pipeline
+	// Create application components (receivers, processors, exporters)
+	component := &runtimeMetricReceiver{}
 	newRelicExporter := exporters.NewNewRelicExporter(
 		"newrelic",
 		INTEGRATION_NAME,
@@ -133,10 +85,29 @@ func main() {
 		i.GetRegion(),
 		i.DryRun,
 	)
-	lp.AddExporter(newRelicExporter)
 
-	// Register the pipeline with the integration
-	i.AddComponent(lp)
+	// Create one or more pipelines
+	mp := pipeline.NewMetricsPipeline("runtime-metric-metrics-pipeline")
+	mp.AddReceiver(component)
+	mp.AddExporter(newRelicExporter)
+
+	// Register a schedule with the integration to run the pipeline component
+	// every minute
+	i.AddSchedule("* * * * *", []integration.Component{ mp })
+
+	// Add component
+	component2 := integration.NewSimpleComponent(
+		"test-last-update-component",
+		i,
+		func(ctx context.Context, li *integration.LabsIntegration) error {
+			return li.UseLastUpdate(ctx, func(lastUpdate time.Time) error {
+				log.Infof("last update is %v", lastUpdate)
+				return nil
+			}, "test-last-update-component")
+		},
+	)
+
+	i.AddComponent(component2)
 
 	// Run the integration
 	defer i.Shutdown(ctx)
